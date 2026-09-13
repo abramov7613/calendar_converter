@@ -3,14 +3,14 @@ cmake_minimum_required(VERSION 3.31)
 project(calendar_converter)
 option(BUILD_TESTS "build tests" ${PROJECT_IS_TOP_LEVEL})
 
-find_package(Boost 1.82 CONFIG REQUIRED COMPONENTS multiprecision)
+find_package(Boost 1.82 CONFIG REQUIRED)
 
 add_library(${PROJECT_NAME} STATIC
   calendar_converter.h
   calendar_converter.cpp
 )
 
-target_link_libraries(${PROJECT_NAME} PUBLIC Boost::multiprecision)
+target_include_directories(${PROJECT_NAME} PRIVATE ${Boost_INCLUDE_DIRS})
 
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_20)
 
