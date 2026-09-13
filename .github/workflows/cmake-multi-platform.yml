@@ -81,7 +81,7 @@ jobs:
       run: |
         git clone https://github.com/microsoft/vcpkg.git vcpkg
         .\vcpkg\bootstrap-vcpkg.bat
-        .\vcpkg\vcpkg install boost:x64-windows
+        .\vcpkg\vcpkg install boost-multiprecision:x64-windows
       env:
         VCPKG_ROOT: ${{ github.workspace }}/vcpkg
 
