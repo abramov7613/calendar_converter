@@ -594,7 +594,7 @@ TEST(CalendarConverter, WeekdayRandomizedConsistency) {
 
     Date date(year, month, day, Gregorian);
 
-    auto next = Date::today_utc();
+    auto next = Date::now_utc();
 
     if (day < max_day) {
       next = Date(year, month, day + 1, Gregorian);

@@ -12,10 +12,6 @@
 
 namespace cc = calendar_converter;
 
-static_assert(static_cast<int>(cc::WeekDay::Sun) == 0);
-
-static_assert(static_cast<int>(cc::WeekDay::Sat) == 6);
-
 namespace {
 
 using INT = boost::multiprecision::cpp_int;
@@ -47,8 +43,11 @@ concept Ostreamable = requires(std::ostream &out, T &&value) {
 };
 
 template <CalendarInteger Integer>
-using CalculationInt = std::conditional_t<std::same_as<Integer, std::int32_t>,
-                                          std::int64_t, Integer>;
+using CalculationInt = std::conditional_t<
+  std::same_as<Integer, std::int32_t>,
+  std::int64_t,
+  Integer
+>;
 
 constexpr bool calendar_is_valid(Calendar calendar) {
   switch (calendar) {
@@ -60,10 +59,13 @@ constexpr bool calendar_is_valid(Calendar calendar) {
   return false;
 }
 
-template <typename Exception = std::runtime_error, typename Arg,
-          typename... Args>
-requires(std::derived_from<Exception, std::exception> &&Ostreamable<Arg> &&
-         (Ostreamable<Args> && ...)) void THROW(Arg &&arg, Args &&...args) {
+template <typename Exception = std::runtime_error, typename Arg, typename... Args>
+requires (
+  std::derived_from<Exception, std::exception> &&
+  Ostreamable<Arg> &&
+  (Ostreamable<Args> && ...)
+)
+void THROW(Arg &&arg, Args &&...args) {
   std::ostringstream out;
   out << std::forward<Arg>(arg);
   ((out << ' ' << std::forward<Args>(args)), ...);
@@ -89,7 +91,8 @@ INT string_to_big_int(const std::string &s) {
 
 template <SupportedInteger Integer>
 Integer floor_div(const Integer &a,
-                  const Integer &b) { // Floor division: returns floor(a / b)
+                  const Integer &b) {
+  // Floor division: returns floor(a / b)
   if (b == 0)
     THROW<std::invalid_argument>("Division by zero");
   if constexpr (std::is_integral_v<Integer>) {
@@ -112,10 +115,8 @@ Integer floor_mod(const Integer &a, const Integer &b) {
 }
 
 template <SupportedInteger Integer>
-std::pair<Integer, Integer>
-euclidean_div(const Integer &a,
-              const Integer &b) { // Euclidean division: a = q * b + r, where 0
-                                  // <= r < abs(b)
+std::pair<Integer, Integer> euclidean_div(const Integer &a, const Integer &b) {
+  // Euclidean division: a = q * b + r, where 0 <= r < abs(b)
   if (b == 0)
     THROW<std::invalid_argument>("Division by zero");
   Integer quotient, remainder;
@@ -200,8 +201,7 @@ Integer gregorian_to_cjdn(const Integer &year, Month m, Day d)
   result += floor_div(Calc(146097) * x3, Calc(4));
   result += floor_div(Calc(36525) * x2, Calc(100));
   result += floor_div(Calc(153) * x1 + 2, Calc(5));
-  if constexpr (std::same_as<Integer, std::int32_t> &&
-                std::same_as<decltype(result), std::int64_t>) {
+  if constexpr (std::same_as<decltype(result), std::int64_t>) {
     assert(result <= std::numeric_limits<std::int32_t>::max());
   }
   return static_cast<Integer>(result);
@@ -218,8 +218,7 @@ Integer julian_to_cjdn(const Integer &year, Month m, Day d)
   // This expression is always small enough for int
   const int j2 = floor_div(153 * m - 1836 * c0 - 457, 5);
   Calc result = j1 + j2 + d + 1721117;
-  if constexpr (std::same_as<Integer, std::int32_t> &&
-                std::same_as<decltype(result), std::int64_t>) {
+  if constexpr (std::same_as<decltype(result), std::int64_t>) {
     assert(result <= std::numeric_limits<std::int32_t>::max());
   }
   return static_cast<Integer>(result);
@@ -241,8 +240,7 @@ Integer revisedjulian_to_cjdn(const Integer &year, Month m, Day d)
   result += floor_div(Calc(328718) * x3 + 6, Calc(9));
   result += floor_div(Calc(36525) * x2, Calc(100));
   result += floor_div(153 * x1 + 2, 5);
-  if constexpr (std::same_as<Integer, std::int32_t> &&
-                std::same_as<decltype(result), std::int64_t>) {
+  if constexpr (std::same_as<decltype(result), std::int64_t>) {
     assert(result <= std::numeric_limits<std::int32_t>::max());
   }
   return static_cast<Integer>(result);
@@ -262,8 +260,7 @@ std::tuple<Integer, Month, Day> cjdn_to_gregorian(const Integer &cjdn)
   const Day d = floor_div(r1, 5) + 1;
   const Month m = x1 - 12 * c0 + 3;
   const Calc y = x3 * 100 + x2 + c0;
-  if constexpr (std::same_as<Integer, std::int32_t> &&
-                std::same_as<decltype(y), std::int64_t>) {
+  if constexpr (std::same_as<decltype(y), std::int64_t>) {
     assert(y <= std::numeric_limits<std::int32_t>::max());
   }
   return {static_cast<Integer>(y), m, d};
@@ -287,8 +284,7 @@ std::tuple<Integer, Month, Day> cjdn_to_julian(const Integer &cjdn)
   const Calc y = floor_div(k2, Calc(1461)) + c0;
   const Month m = x1 - 12 * c0 + 3;
   const Day d = floor_div(floor_mod(k1, 153), 5) + 1;
-  if constexpr (std::same_as<Integer, std::int32_t> &&
-                std::same_as<decltype(y), std::int64_t>) {
+  if constexpr (std::same_as<decltype(y), std::int64_t>) {
     assert(y <= std::numeric_limits<std::int32_t>::max());
   }
   return {static_cast<Integer>(y), m, d};
@@ -311,8 +307,7 @@ std::tuple<Integer, Month, Day> cjdn_to_revisedjulian(const Integer &cjdn)
   const Calc y = x3 * 100 + x2 + c0;
   const Month m = x1 - 12 * c0 + 3;
   const Day d = floor_div(floor_mod(k1, 153), 5) + 1;
-  if constexpr (std::same_as<Integer, std::int32_t> &&
-                std::same_as<decltype(y), std::int64_t>) {
+  if constexpr (std::same_as<decltype(y), std::int64_t>) {
     assert(y <= std::numeric_limits<std::int32_t>::max());
   }
   return {static_cast<Integer>(y), m, d};
@@ -356,6 +351,10 @@ public:
   virtual INT cjdn() const = 0;
 
   virtual WeekDay weekday() const = 0;
+
+  virtual bool increment_self(unsigned long long days) = 0;
+
+  virtual bool decrement_self(unsigned long long days) = 0;
 
   virtual Year year(const Calendar calendar) const {
     return std::get<0>(ymd(calendar));
@@ -422,16 +421,62 @@ public:
   }
 
   virtual WeekDay weekday() const override {
+    static_assert(static_cast<int>(cc::WeekDay::Sun) == 0);
+    static_assert(static_cast<int>(cc::WeekDay::Mon) == 1);
+    static_assert(static_cast<int>(cc::WeekDay::Tue) == 2);
+    static_assert(static_cast<int>(cc::WeekDay::Wed) == 3);
+    static_assert(static_cast<int>(cc::WeekDay::Thu) == 4);
+    static_assert(static_cast<int>(cc::WeekDay::Fri) == 5);
+    static_assert(static_cast<int>(cc::WeekDay::Sat) == 6);
     using Calc = CalculationInt<T>;
     const Calc q = cjdn_ + 1;
     const int x = static_cast<int>(floor_mod(q, Calc(7)));
     return static_cast<WeekDay>(x);
   }
+
+  virtual bool increment_self(unsigned long long days) override {
+    if constexpr (std::is_integral_v<T>) {
+      if ( static_cast<unsigned long long>(std::numeric_limits<T>::max() - cjdn_) < days ) {
+        return false;
+      }
+      cjdn_ += static_cast<T>(days);
+      return true;
+    } else {
+      cjdn_ += days;
+      return true;
+    }
+  }
+
+  virtual bool decrement_self(unsigned long long days) override {
+    if constexpr (std::is_integral_v<T>) {
+      if (const auto x1 = static_cast<unsigned long long>(cjdn_); x1 > days) {
+        if (const auto x2 = x1 - days; x2 >= MIN_CJDN && x2 <= std::numeric_limits<T>::max()) {
+          cjdn_ = static_cast<T>(x2);
+          return true;
+        } else {
+          return false;
+        }
+      } else {
+        return false;
+      }
+    } else {
+      if (const auto x = cjdn_ - days; x >= MIN_CJDN) {
+        cjdn_ = x;
+        return true;
+      } else {
+        return false;
+      }
+    }
+  }
 }; // class DateCommonImplementation
 
-/*static*/ Date Date::today_utc(Calendar calendar) {
-  const std::chrono::year_month_day std_ymd{
-      std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now())};
+using ShortDate = DateCommonImplementation<std::int32_t>;
+using LongDate =  DateCommonImplementation<INT>;
+
+/*static*/ Date Date::now_utc(Calendar calendar) {
+  const std::chrono::year_month_day std_ymd {
+      std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now())
+  };
   const auto now = Date(static_cast<int>(std_ymd.year()),
                         static_cast<unsigned>(std_ymd.month()),
                         static_cast<unsigned>(std_ymd.day()), Gregorian);
@@ -439,9 +484,11 @@ public:
   return Date(y, m, d, calendar);
 }
 
+/*static*/ Date Date::min() {
+  return Date(1, 1, 1, Gregorian);
+}
+
 Date::Date(const Year &year, Month m, Day d, Calendar calendar) {
-  using ShortDate = DateCommonImplementation<std::int32_t>;
-  using LongDate = DateCommonImplementation<INT>;
   if (!calendar_is_valid(calendar))
     THROW<std::invalid_argument>("invalid Calendar value: ",
                                  static_cast<int>(calendar));
@@ -480,8 +527,11 @@ Date::Date(const Year &year, Month m, Day d, Calendar calendar) {
   }
 }
 
+Date::Date(const std::tuple<Year, Month, Day>& ymd, Calendar c)
+  : Date(std::get<0>(ymd), std::get<1>(ymd), std::get<2>(ymd), c) {}
+
 Date::Date(long long y, Month m, Day d, Calendar c)
-    : Date(std::to_string(y), m, d, c) {}
+  : Date(std::to_string(y), m, d, c) {}
 
 void Date::swap(Date &other) noexcept { pImpl.swap(other.pImpl); }
 
@@ -495,34 +545,19 @@ Date &Date::operator=(Date other) {
   return *this;
 }
 
-bool Date::operator==(const Date &rhs) const {
+std::strong_ordering Date::operator<=>(const Date& rhs) const {
   Implementation::check_valid_comparison(*this, rhs);
-  return pImpl->cjdn() == rhs.pImpl->cjdn();
+  const auto lhs_cjdn = pImpl->cjdn();
+  const auto rhs_cjdn = rhs.pImpl->cjdn();
+  if (lhs_cjdn < rhs_cjdn)
+      return std::strong_ordering::less;
+  if (lhs_cjdn > rhs_cjdn)
+      return std::strong_ordering::greater;
+  return std::strong_ordering::equal;
 }
 
-bool Date::operator!=(const Date &rhs) const {
-  Implementation::check_valid_comparison(*this, rhs);
-  return pImpl->cjdn() != rhs.pImpl->cjdn();
-}
-
-bool Date::operator<(const Date &rhs) const {
-  Implementation::check_valid_comparison(*this, rhs);
-  return pImpl->cjdn() < rhs.pImpl->cjdn();
-}
-
-bool Date::operator>(const Date &rhs) const {
-  Implementation::check_valid_comparison(*this, rhs);
-  return pImpl->cjdn() > rhs.pImpl->cjdn();
-}
-
-bool Date::operator<=(const Date &rhs) const {
-  Implementation::check_valid_comparison(*this, rhs);
-  return pImpl->cjdn() <= rhs.pImpl->cjdn();
-}
-
-bool Date::operator>=(const Date &rhs) const {
-  Implementation::check_valid_comparison(*this, rhs);
-  return pImpl->cjdn() >= rhs.pImpl->cjdn();
+bool Date::operator==(const Date& rhs) const {
+    return (*this <=> rhs) == std::strong_ordering::equal;
 }
 
 std::string Date::cjdn() const {
@@ -560,7 +595,30 @@ std::tuple<Month, Day> Date::md(Calendar c) const {
   return pImpl->md(c);
 }
 
+Date& Date::inc(unsigned long long days) {
+  Implementation::check_valid_operation(*this);
+  if (!pImpl->increment_self(days)) {
+    pImpl = std::make_unique<LongDate>(pImpl->cjdn());
+    [[maybe_unused]] const bool ok = pImpl->increment_self(days);
+    assert(ok);
+  }
+  return *this;
+}
+
+Date& Date::dec(unsigned long long days) {
+  Implementation::check_valid_operation(*this);
+  if (!pImpl->decrement_self(days)) {
+    auto d = Date::min();
+    d.swap(*this);
+  }
+  return *this;
+}
+
 Date::~Date() noexcept = default;
 Date::Date(Date &&) noexcept = default;
+
+void swap(Date &lhs, Date &rhs) noexcept {
+  lhs.swap(rhs);
+}
 
 } // namespace calendar_converter

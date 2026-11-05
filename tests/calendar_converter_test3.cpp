@@ -564,7 +564,7 @@ TEST(CalendarConverter, LeadingZerosRepresentSameYear) {
 // -----------------------------------------------------------------------------
 
 TEST(CalendarConverter, StaticConstructorRepresentsTodayInGregorian) {
-  const auto date = Date::today_utc(Gregorian);
+  const auto date = Date::now_utc(Gregorian);
 
   const auto now = std::chrono::system_clock::now();
 

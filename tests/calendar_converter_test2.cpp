@@ -684,7 +684,7 @@ TEST(CalendarConverter, HugeYearDoesNotAffectMonthOrDay) {
 // =============================================================================
 
 TEST(CalendarConverter, TodayUtcProducesValidDate) {
-  const cc::Date today = cc::Date::today_utc(cc::Gregorian);
+  const cc::Date today = cc::Date::now_utc(cc::Gregorian);
 
   const auto [year, month, day] = today.ymd(cc::Gregorian);
 
@@ -697,7 +697,7 @@ TEST(CalendarConverter, TodayUtcProducesValidDate) {
 }
 
 TEST(CalendarConverter, TodayCanBeRepresentedInAllCalendars) {
-  const cc::Date today = cc::Date::today_utc(cc::Gregorian);
+  const cc::Date today = cc::Date::now_utc(cc::Gregorian);
 
   for (const auto calendar : {cc::Gregorian, cc::Julian, cc::RevisedJulian}) {
     const auto [year, month, day] = today.ymd(calendar);
