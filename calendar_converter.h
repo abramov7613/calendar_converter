@@ -38,7 +38,8 @@ class Date {
 
 public:
   static Date now_utc(Calendar = Gregorian);
-  static Date min();
+  static const Date& min();
+  static const Date& max();
   ~Date() noexcept;
   Date(const Year&, Month, Day, Calendar = Gregorian);
   Date(const std::tuple<Year, Month, Day>&, Calendar = Gregorian);

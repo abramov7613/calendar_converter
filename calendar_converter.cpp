@@ -484,8 +484,14 @@ using LongDate =  DateCommonImplementation<INT>;
   return Date(y, m, d, calendar);
 }
 
-/*static*/ Date Date::min() {
-  return Date(1, 1, 1, Gregorian);
+/*static*/ const Date& Date::min() {
+  static const Date d (1, 1, 1, Gregorian);
+  return d;
+}
+
+/*static*/ const Date& Date::max() {
+  static const Date d (std::string(MAX_YEAR_DIGITS, '9'), 12, 31, RJulian);
+  return d;
 }
 
 Date::Date(const Year &year, Month m, Day d, Calendar calendar) {
