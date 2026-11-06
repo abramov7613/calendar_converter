@@ -1,5 +1,4 @@
 #include "calendar_converter.h"
-#include <boost/multiprecision/cpp_int.hpp>
 #include <cassert>
 #include <chrono>
 #include <concepts>
@@ -12,9 +11,10 @@
 
 namespace cc = calendar_converter;
 
+
 namespace {
 
-using INT = boost::multiprecision::cpp_int;
+using cc::flexint;
 using cc::Calendar;
 using cc::Day;
 using cc::Gregorian;
@@ -24,40 +24,17 @@ using cc::RevisedJulian;
 using cc::WeekDay;
 using cc::Year;
 
+
 constexpr std::int32_t MIN_CJDN = 1'721'426;
 constexpr std::int32_t MIN_YEAR = 1;
-constexpr std::size_t MAX_YEAR_DIGITS = 2048;
+constexpr std::size_t MAX_YEAR_DIGITS = 40;
 
-template <typename T>
-concept CalendarInteger = std::same_as<T, std::int32_t> || std::same_as<T, INT>;
-
-template <typename T>
-concept SupportedInteger = std::same_as<T, int> || std::same_as<T, short> ||
-    std::same_as<T, long> || std::same_as<T, long long> ||
-    std::same_as<T, std::int16_t> || std::same_as<T, std::int32_t> ||
-    std::same_as<T, std::int64_t> || std::same_as<T, INT>;
 
 template <typename T>
 concept Ostreamable = requires(std::ostream &out, T &&value) {
   out << std::forward<T>(value);
 };
 
-template <CalendarInteger Integer>
-using CalculationInt = std::conditional_t<
-  std::same_as<Integer, std::int32_t>,
-  std::int64_t,
-  Integer
->;
-
-constexpr bool calendar_is_valid(Calendar calendar) {
-  switch (calendar) {
-  case Gregorian:
-  case Julian:
-  case RevisedJulian:
-    return true;
-  }
-  return false;
-}
 
 template <typename Exception = std::runtime_error, typename Arg, typename... Args>
 requires (
@@ -72,97 +49,103 @@ void THROW(Arg &&arg, Args &&...args) {
   throw Exception(out.str());
 }
 
-INT string_to_big_int(const std::string &s) {
-  if (s.empty()) {
-    THROW<std::invalid_argument>("empty year");
-  }
-  for (const unsigned char ch : s) {
-    if (ch < '0' || ch > '9') {
-      THROW<std::invalid_argument>("invalid decimal year: '", s, "'");
+
+template<typename T1, typename T2> requires (
+  (std::same_as<T1, int> || std::same_as<T1, flexint>) &&
+  (std::same_as<T2, int> || std::same_as<T2, flexint>)
+)
+auto floor_div(const T1& a, const T2& b) {
+    if ( b == 0 ) THROW<std::invalid_argument>("Division by zero");
+    using ResultType = std::conditional_t<
+      std::is_same_v<T1, flexint> || std::is_same_v<T2, flexint>,
+      flexint,
+      int
+    >;
+    ResultType q = a / b;
+    ResultType r = a % b;
+    return (r!=0 && ((a < 0) != (b < 0))) ? q - 1 : q;
+}
+
+
+template<typename T1, typename T2> requires (
+  (std::same_as<T1, int> || std::same_as<T1, flexint>) &&
+  (std::same_as<T2, int> || std::same_as<T2, flexint>)
+)
+auto floor_mod(const T1& a, const T2& b) {
+    if (b <= 0)
+      THROW<std::invalid_argument>("Modulus must be positive");
+    using ResultType = std::conditional_t<
+      std::is_same_v<T1, flexint> || std::is_same_v<T2, flexint>,
+      flexint,
+      int
+    >;
+    ResultType r = a % b;
+    if (r < 0)
+      r += b;
+    return r;
+}
+
+
+template<typename T1, typename T2> requires (
+  (std::same_as<T1, int> || std::same_as<T1, flexint>) &&
+  (std::same_as<T2, int> || std::same_as<T2, flexint>)
+)
+auto euclidean_div(const T1& a, const T2& b) {
+    // Euclidean division: a = q * b + r, where 0 <= r < abs(b)
+    if (b == 0) THROW<std::invalid_argument>("Division by zero");
+    using ResultType = std::conditional_t<
+      std::is_same_v<T1, flexint> || std::is_same_v<T2, flexint>,
+      flexint,
+      int
+    >;
+    ResultType quotient = a / b;
+    ResultType remainder = a % b;
+    if (remainder < 0) {
+      if (b > 0) {
+        quotient -= 1;
+        remainder += b;
+      } else {
+        quotient += 1;
+        remainder -= b;
+      }
     }
-  }
-  INT result = 0;
-  for (const char ch : s) {
-    result *= 10;
-    result += ch - '0';
-  }
-  return result;
+    return std::make_pair(quotient, remainder);
 }
 
-template <SupportedInteger Integer>
-Integer floor_div(const Integer &a,
-                  const Integer &b) {
-  // Floor division: returns floor(a / b)
-  if (b == 0)
-    THROW<std::invalid_argument>("Division by zero");
-  if constexpr (std::is_integral_v<Integer>) {
-    if (a == std::numeric_limits<Integer>::min() && b == -1)
-      THROW<std::overflow_error>("integer division overflow");
+
+constexpr bool calendar_is_valid(Calendar calendar) {
+  switch (calendar) {
+  	case Gregorian:
+  	case Julian:
+  	case RevisedJulian:
+    	return true;
   }
-  Integer q = a / b;
-  Integer r = a % b;
-  return (r != 0 && ((a < 0) != (b < 0))) ? q - 1 : q;
+  return false;
 }
 
-template <SupportedInteger Integer>
-Integer floor_mod(const Integer &a, const Integer &b) {
-  if (b <= 0)
-    THROW<std::invalid_argument>("Modulus must be positive");
-  Integer r = a % b;
-  if (r < 0)
-    r += b;
-  return r;
-}
 
-template <SupportedInteger Integer>
-std::pair<Integer, Integer> euclidean_div(const Integer &a, const Integer &b) {
-  // Euclidean division: a = q * b + r, where 0 <= r < abs(b)
-  if (b == 0)
-    THROW<std::invalid_argument>("Division by zero");
-  Integer quotient, remainder;
-  if constexpr (std::is_integral_v<Integer>) {
-    if (a == std::numeric_limits<Integer>::min() && b == -1) {
-      THROW<std::overflow_error>("integer division overflow");
-    }
-    quotient = a / b;
-    remainder = a % b;
-  } else {
-    boost::multiprecision::divide_qr(a, b, quotient, remainder);
-  }
-  if (remainder < 0) {
-    if (b > 0) {
-      quotient -= 1;
-      remainder += b;
-    } else {
-      quotient += 1;
-      remainder -= b;
-    }
-  }
-  return {quotient, remainder};
-}
-
-template <SupportedInteger Integer>
-bool is_leap(const Integer &year, const Calendar calendar) {
+bool is_leap(const flexint &year, const Calendar calendar) {
   if (!calendar_is_valid(calendar))
     THROW<std::invalid_argument>("invalid Calendar value: ",
                                  static_cast<int>(calendar));
   switch (calendar) {
   case Julian:
-    return floor_mod(year, Integer(4)) == 0;
+    return floor_mod(year, 4) == 0;
 
   case Gregorian:
-    return floor_mod(year, Integer(4)) == 0 &&
-           (floor_mod(year, Integer(100)) != 0 ||
-            floor_mod(year, Integer(400)) == 0);
+    return floor_mod(year, 4) == 0 &&
+           (floor_mod(year, 100) != 0 ||
+            floor_mod(year, 400) == 0);
 
   case RevisedJulian:
-    return floor_mod(year, Integer(4)) == 0 &&
-           (floor_mod(year, Integer(100)) != 0 ||
-            floor_mod(year, Integer(900)) == 200 ||
-            floor_mod(year, Integer(900)) == 600);
+    return floor_mod(year, 4) == 0 &&
+           (floor_mod(year, 10) != 0 ||
+            floor_mod(year, 900) == 200 ||
+            floor_mod(year, 900) == 600);
   }
   return false;
 }
+
 
 int m_length(const Month month, const bool leap) {
   switch (month) {
@@ -187,253 +170,463 @@ int m_length(const Month month, const bool leap) {
   return -1;
 }
 
-template <CalendarInteger Integer>
-Integer gregorian_to_cjdn(const Integer &year, Month m, Day d)
+
+flexint gregorian_to_cjdn(const flexint& year, Month m, Day d)
 // Dr Louis Strous's method:
 // https://aa.quae.nl/en/reken/juliaansedag.html#3_1
 {
-  using Calc = CalculationInt<Integer>;
   const int c0 = floor_div(m - 3, 12);
   const int x1 = m - 12 * c0 - 3;
-  const Calc x4 = Calc(year) + c0;
-  auto [x3, x2] = euclidean_div(x4, Calc(100));
-  Calc result = Calc(d) + 1721119;
-  result += floor_div(Calc(146097) * x3, Calc(4));
-  result += floor_div(Calc(36525) * x2, Calc(100));
-  result += floor_div(Calc(153) * x1 + 2, Calc(5));
-  if constexpr (std::same_as<decltype(result), std::int64_t>) {
-    assert(result <= std::numeric_limits<std::int32_t>::max());
-  }
-  return static_cast<Integer>(result);
+  const flexint x4 = year + c0;
+  auto [x3, x2] = euclidean_div(x4, 100);
+  flexint result = d + 1721119;
+  result += floor_div(146097 * x3, 4);
+  result += floor_div(36525 * x2, 100);
+  result += floor_div(153 * x1 + 2, 5);
+  return result;
 }
 
-template <CalendarInteger Integer>
-Integer julian_to_cjdn(const Integer &year, Month m, Day d)
+
+flexint julian_to_cjdn(const flexint &year, Month m, Day d)
 // Dr Louis Strous's method:
 // https://aa.quae.nl/en/reken/juliaansedag.html#5_1
 {
-  using Calc = CalculationInt<Integer>;
   const int c0 = floor_div(m - 3, 12);
-  const Calc j1 = floor_div(Calc(1461) * (Calc(year) + c0), Calc(4));
+  const flexint j1 = floor_div(1461 * (year + c0), 4);
   // This expression is always small enough for int
   const int j2 = floor_div(153 * m - 1836 * c0 - 457, 5);
-  Calc result = j1 + j2 + d + 1721117;
-  if constexpr (std::same_as<decltype(result), std::int64_t>) {
-    assert(result <= std::numeric_limits<std::int32_t>::max());
-  }
-  return static_cast<Integer>(result);
+  flexint result = j1 + j2 + d + 1721117;
+  return result;
 }
 
-template <CalendarInteger Integer>
-Integer revisedjulian_to_cjdn(const Integer &year, Month m, Day d)
+
+flexint revisedjulian_to_cjdn(const flexint &year, Month m, Day d)
 // Dr Louis Strous's method:
 // https://aa.quae.nl/en/reken/juliaansedag.html#4_1
 {
-  using Calc = CalculationInt<Integer>;
   const int c0 = floor_div(m - 3, 12);
   const int x1 = m - c0 * 12 - 3;
-  const Calc x4 = Calc(year) + c0;
-  const Calc x3 = floor_div(x4, Calc(100));
-  const int x2 =
-      static_cast<int>(floor_mod(x4, Calc(100))); // safe: 0 <= x2 < 100
-  Calc result = Calc(d) + 1721119;
-  result += floor_div(Calc(328718) * x3 + 6, Calc(9));
-  result += floor_div(Calc(36525) * x2, Calc(100));
+  const flexint x4 = year + c0;
+  const flexint x3 = floor_div(x4, 100);
+  const flexint x2 = floor_mod(x4, 100);
+  flexint result = d + 1721119;
+  result += floor_div(328718 * x3 + 6, 9);
+  result += floor_div(36525 * x2, 100);
   result += floor_div(153 * x1 + 2, 5);
-  if constexpr (std::same_as<decltype(result), std::int64_t>) {
-    assert(result <= std::numeric_limits<std::int32_t>::max());
-  }
-  return static_cast<Integer>(result);
+  return result;
 }
 
-template <CalendarInteger Integer>
-std::tuple<Integer, Month, Day> cjdn_to_gregorian(const Integer &cjdn)
+
+std::tuple<Year, Month, Day> cjdn_to_gregorian(const flexint& cjdn)
 // Dr Louis Strous's method:
 // https://aa.quae.nl/en/reken/juliaansedag.html#3_2
 {
-  using Calc = CalculationInt<Integer>;
-  auto [x3, r3] = euclidean_div(Calc(4) * Calc(cjdn) - 6884477, Calc(146097));
-  const int r3i = static_cast<int>(r3); // safe: 0 <= r3 < 146097
-  auto [x2, r2] = euclidean_div(100 * floor_div(r3i, 4) + 99, 36525);
+  auto [x3, r3] = euclidean_div(4 * cjdn - 6884477, 146097);
+  auto [x2, r2] = euclidean_div(100 * floor_div(r3, 4) + 99, 36525);
   auto [x1, r1] = euclidean_div(5 * floor_div(r2, 100) + 2, 153);
-  const int c0 = floor_div(x1 + 2, 12);
-  const Day d = floor_div(r1, 5) + 1;
-  const Month m = x1 - 12 * c0 + 3;
-  const Calc y = x3 * 100 + x2 + c0;
-  if constexpr (std::same_as<decltype(y), std::int64_t>) {
-    assert(y <= std::numeric_limits<std::int32_t>::max());
-  }
-  return {static_cast<Integer>(y), m, d};
+  const auto c0 = static_cast<int>(floor_div(x1 + 2, 12));
+  const auto d = static_cast<int>(floor_div(r1, 5) + 1);
+  const auto m = static_cast<int>(x1 - 12 * c0 + 3);
+  const flexint y = x3 * 100 + x2 + c0;
+  return {y, m, d};
 }
 
-template <CalendarInteger Integer>
-std::tuple<Integer, Month, Day> cjdn_to_julian(const Integer &cjdn)
+
+std::tuple<Year, Month, Day> cjdn_to_julian(const flexint &cjdn)
 // Dr Louis Strous's method:
 // https://aa.quae.nl/en/reken/juliaansedag.html#5_2
 {
-  using Calc = CalculationInt<Integer>;
-  const Calc y2 = Calc(cjdn) - 1721118;
-  const Calc k2 = y2 * 4 + 3;
+  const flexint y2 = cjdn - 1721118;
+  const flexint k2 = y2 * 4 + 3;
   const int k1 =
-      5 * floor_div(static_cast<int>(floor_mod(
-                        k2, Calc(1461))), // safe: 0 <= static_cast < 1461
-                    4) +
-      2;
+      5 * floor_div(static_cast<int>(floor_mod(k2, 1461)), 4) + 2;
   const int x1 = floor_div(k1, 153);
   const int c0 = floor_div(x1 + 2, 12);
-  const Calc y = floor_div(k2, Calc(1461)) + c0;
+  const flexint y = floor_div(k2, 1461) + c0;
   const Month m = x1 - 12 * c0 + 3;
   const Day d = floor_div(floor_mod(k1, 153), 5) + 1;
-  if constexpr (std::same_as<decltype(y), std::int64_t>) {
-    assert(y <= std::numeric_limits<std::int32_t>::max());
-  }
-  return {static_cast<Integer>(y), m, d};
+  return {y, m, d};
 }
 
-template <CalendarInteger Integer>
-std::tuple<Integer, Month, Day> cjdn_to_revisedjulian(const Integer &cjdn)
+
+std::tuple<Year, Month, Day> cjdn_to_revisedjulian(const flexint &cjdn)
 // Dr Louis Strous's method:
 // https://aa.quae.nl/en/reken/juliaansedag.html#4_2
 {
-  using Calc = CalculationInt<Integer>;
-  const Calc k3 = Calc(9) * (Calc(cjdn) - 1721120) + 2;
-  const Calc x3 = floor_div(k3, Calc(328718));
+  const flexint k3 = 9 * (cjdn - 1721120) + 2;
+  const flexint x3 = floor_div(k3, 328718);
   const int k2 =
-      100 * floor_div(static_cast<int>(floor_mod(k3, Calc(328718))), 9) + 99;
+      100 * floor_div(static_cast<int>(floor_mod(k3, 328718)), 9) + 99;
   const int x2 = floor_div(k2, 36525);
   const int k1 = floor_div(floor_mod(k2, 36525), 100) * 5 + 2;
   const int x1 = floor_div(k1, 153);
   const int c0 = floor_div(x1 + 2, 12);
-  const Calc y = x3 * 100 + x2 + c0;
+  const flexint y = x3 * 100 + x2 + c0;
   const Month m = x1 - 12 * c0 + 3;
   const Day d = floor_div(floor_mod(k1, 153), 5) + 1;
-  if constexpr (std::same_as<decltype(y), std::int64_t>) {
-    assert(y <= std::numeric_limits<std::int32_t>::max());
-  }
-  return {static_cast<Integer>(y), m, d};
+  return {y, m, d};
 }
 
 } // namespace
 
+
 namespace calendar_converter {
 
-bool is_leap_year(const Year &year, Calendar calendar) {
-  INT y{string_to_big_int(year)};
-  return is_leap(y, calendar);
+/*static*/ez3i::mpz_manager& flexint::m() {
+  static ez3i::mpz_manager m {} ;
+  return m;
 }
+
+
+flexint::flexint(){}
+
+
+flexint::flexint(int n) { m().set(m_num, n); }
+
+
+flexint::flexint(const std::string& s) {
+  if (s.empty()) {
+    THROW<std::invalid_argument>("empty year");
+  }
+  for (const unsigned char ch : s) {
+    if (ch < '0' || ch > '9') {
+      THROW<std::invalid_argument>("invalid decimal year: '", s, "'");
+    }
+  }
+  flexint result = 0;
+  for (const char ch : s) {
+    result *= 10;
+    result += ch - '0';
+  }
+  result.swap(*this);
+}
+
+
+flexint::flexint(flexint const& n) { m().set(m_num, n.m_num); }
+
+
+flexint::flexint(flexint && n) noexcept { m().swap(m_num, n.m_num); }
+
+
+flexint::~flexint() { m().del(m_num); }
+
+
+flexint::operator int() const { return m().get_int(m_num); }
+
+
+flexint::operator ez3i::mpz const &() const { return m_num; }
+
+
+flexint::operator ez3i::mpz&() { return m_num; }
+
+
+ez3i::mpz const & flexint::get() const { return m_num; }
+
+
+ez3i::mpz & flexint::get() { return m_num; }
+
+
+flexint & flexint::operator=(flexint const & n) {
+  if (this == &n)
+      return *this;
+  m().set(m_num, n.m_num);
+  return *this;
+}
+
+
+flexint & flexint::operator=(int n) {
+  m().set(m_num, n);
+  return *this;
+}
+
+
+flexint & flexint::operator=(ez3i::mpz const & n) {
+  m().set(m_num, n);
+  return *this;
+}
+
+
+void flexint::reset() {
+  m().reset(m_num);
+}
+
+
+void flexint::swap(flexint & n) noexcept {
+  m().swap(m_num, n.m_num);
+}
+
+
+void flexint::swap(ez3i::mpz & n) noexcept {
+  m().swap(m_num, n);
+}
+
+
+flexint & flexint::operator+=(ez3i::mpz const & a) {
+  m().add(m_num, a, m_num);
+  return *this;
+}
+
+
+flexint & flexint::operator-=(ez3i::mpz const & a) {
+  m().sub(m_num, a, m_num);
+  return *this;
+}
+
+
+flexint & flexint::operator*=(ez3i::mpz const & a) {
+  m().mul(m_num, a, m_num);
+  return *this;
+}
+
+
+flexint & flexint::operator/=(ez3i::mpz const & a) {
+  m().div(m_num, a, m_num);
+  return *this;
+}
+
+
+flexint & flexint::operator%=(ez3i::mpz const & a) {
+  m().rem(m_num, a, m_num);
+  return *this;
+}
+
+
+bool operator==(flexint const & a, ez3i::mpz const & b) {
+  return a.m().eq(a, b);
+}
+
+
+bool operator!=(flexint const & a, ez3i::mpz const & b) {
+  return !a.m().eq(a, b);
+}
+
+
+bool operator<(flexint const & a, ez3i::mpz const & b) {
+  return a.m().lt(a, b);
+}
+
+
+bool operator>(flexint const & a, ez3i::mpz const & b) {
+  return a.m().gt(a, b);
+}
+
+
+bool operator<=(flexint const & a, ez3i::mpz const & b) {
+  return a.m().le(a, b);
+}
+
+
+bool operator>=(flexint const & a, ez3i::mpz const & b) {
+  return a.m().ge(a, b);
+}
+
+
+std::strong_ordering operator<=>(flexint const & a, ez3i::mpz const & b) {
+  if (a < b) return std::strong_ordering::less;
+  if (a > b) return std::strong_ordering::greater;
+  return std::strong_ordering::equal;
+}
+
+
+bool flexint::is_zero() const {
+  return m().is_zero(*this);
+}
+
+
+bool is_zero(flexint const & a) {
+  return a.m().is_zero(a);
+}
+
+
+std::string flexint::str() const {
+  return m().to_string(m_num);
+}
+
+
+flexint abs(flexint const& a) {
+  flexint res(a);
+  a.m().abs(res);
+  return res;
+}
+
+
+std::string to_string(flexint const& a) {
+  return a.str();
+}
+
+
+flexint operator+(flexint const & r1, ez3i::mpz const & r2) {
+  return flexint(r1) += r2;
+}
+
+
+flexint operator-(flexint const & r1, ez3i::mpz const & r2) {
+  return flexint(r1) -= r2;
+}
+
+
+flexint operator*(flexint const & r1, ez3i::mpz const & r2) {
+  return flexint(r1) *= r2;
+}
+
+
+flexint operator/(flexint const & r1, ez3i::mpz const & r2) {
+  return flexint(r1) /= r2;
+}
+
+
+flexint operator%(flexint const & r1, ez3i::mpz const & r2) {
+  return flexint(r1) %= r2;
+}
+
+
+std::ostream & operator<<(std::ostream & out, flexint const & s) {
+  s.m().display(out, s);
+  return out;
+}
+
+
+bool is_leap_year(const Year &year, Calendar calendar) {
+  return is_leap(year, calendar);
+}
+
 
 bool is_leap_year(long long year, Calendar calendar) {
   return is_leap(year, calendar);
 }
 
+
 int days_in_month(Month month, bool is_leap_year) {
   return m_length(month, is_leap_year);
 }
 
-class Date::Implementation {
-public:
-  static void check_valid_operation(const Date &obj) {
-    if (!obj.pImpl)
-      THROW("operation with moved object");
-  }
 
-  static void check_valid_comparison(const Date &lhs, const Date &rhs) {
-    if (!lhs.pImpl || !rhs.pImpl)
-      THROW("comparison with moved object");
-  }
+/*static*/ Date Date::now_utc(Calendar calendar) {
+  const std::chrono::year_month_day std_ymd {
+      std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now())
+  };
+  const auto now = Date (
+    static_cast<int>(std_ymd.year()),
+    static_cast<unsigned>(std_ymd.month()),
+    static_cast<unsigned>(std_ymd.day()),
+    Gregorian
+  );
+  return Date(now.ymd(calendar), calendar);
+}
 
-  virtual ~Implementation() noexcept = default;
 
-  virtual std::unique_ptr<Implementation> clone() const = 0;
+/*static*/ const Date& Date::min() {
+  static const Date d (1, 1, 1, Gregorian);
+  return d;
+}
 
-  virtual std::tuple<Year, Month, Day> ymd(const Calendar) const = 0;
 
-  virtual INT cjdn() const = 0;
+/*static*/ const Date& Date::max() {
+  static const Date d (std::string(MAX_YEAR_DIGITS, '9'), 12, 31, RJulian);
+  return d;
+}
 
-  virtual WeekDay weekday() const = 0;
 
-  virtual bool increment_self(unsigned long long days) = 0;
-
-  virtual bool decrement_self(unsigned long long days) = 0;
-
-  virtual Year year(const Calendar calendar) const {
-    return std::get<0>(ymd(calendar));
-  }
-
-  virtual Month month(const Calendar calendar) const {
-    return std::get<1>(ymd(calendar));
-  }
-
-  virtual Day day(const Calendar calendar) const {
-    return std::get<2>(ymd(calendar));
-  }
-
-  virtual std::tuple<Month, Day> md(const Calendar calendar) const {
-    const auto result = ymd(calendar);
-    return {std::get<1>(result), std::get<2>(result)};
-  }
-}; // class Date::Implementation
-
-template <typename T>
-class DateCommonImplementation : public Date::Implementation {
-  static_assert(CalendarInteger<T>);
-  T cjdn_; // Chronological Julian Day Number
-
-public:
-  explicit DateCommonImplementation(T cjdn) : cjdn_(std::move(cjdn)) {}
-
-  virtual std::unique_ptr<Date::Implementation> clone() const override {
-    return std::make_unique<DateCommonImplementation>(*this);
-  }
-
-  virtual std::tuple<Year, Month, Day>
-  ymd(const Calendar calendar) const override {
-    if (!calendar_is_valid(calendar))
-      THROW<std::invalid_argument>("invalid Calendar value: ",
-                                   static_cast<int>(calendar));
-    T y;
-    Month m;
-    Day d;
-    switch (calendar) {
+Date::Date(const Year &year, Month m, Day d, Calendar calendar) {
+  if (!calendar_is_valid(calendar)) THROW<std::invalid_argument>(
+      "invalid Calendar value: ",
+      static_cast<int>(calendar)
+  );
+  if (year < MIN_YEAR || year > max().year()) THROW<std::invalid_argument>(
+      "invalid year value: must be >= ",
+      MIN_YEAR,
+      " && <= ",
+      std::string(MAX_YEAR_DIGITS, '9')
+  );
+  if (m < 1 || m > 12)
+    THROW<std::invalid_argument>("invalid month value: ", m);
+  if (d < 1 || d > days_in_month(m, is_leap(year, calendar)))
+    THROW<std::invalid_argument>("invalid day value: ", d);
+  switch (calendar) {
     case Julian:
-      std::tie(y, m, d) = cjdn_to_julian(cjdn_);
+      cjdn_ = julian_to_cjdn(year, m, d);
       break;
     case Gregorian:
-      std::tie(y, m, d) = cjdn_to_gregorian(cjdn_);
+      cjdn_ = gregorian_to_cjdn(year, m, d);
       break;
     case RevisedJulian:
-      std::tie(y, m, d) = cjdn_to_revisedjulian(cjdn_);
+      cjdn_ = revisedjulian_to_cjdn(year, m, d);
       break;
-    }
-    if constexpr (std::is_integral_v<T>) {
-      return {std::to_string(y), m, d};
-    } else {
-      return {y.str(), m, d};
-    }
   }
+  if (cjdn_ < MIN_CJDN) THROW<std::invalid_argument>(
+      "the minimum acceptable date is [dd-mm-yy]: "
+      "01-01-01 in Gregorian, and "
+      "03-01-01 in Julian calendars"
+  );
+}
 
-  virtual INT cjdn() const override {
-    if constexpr (std::is_integral_v<T>) {
-      return INT(cjdn_);
-    } else {
-      return cjdn_;
-    }
+
+Date::Date(const std::tuple<Year, Month, Day>& ymd, Calendar c)
+  : Date(std::get<0>(ymd), std::get<1>(ymd), std::get<2>(ymd), c)
+{
+}
+
+
+Date::Date(long long y, Month m, Day d, Calendar c) : Date(Year(y), m, d, c)
+{
+}
+
+
+std::tuple<Year, Month, Day> Date::ymd(Calendar calendar) const {
+  switch (calendar) {
+    case Julian:    return cjdn_to_julian(cjdn_);
+    case Gregorian: return cjdn_to_gregorian(cjdn_);
+    case RJulian:   return cjdn_to_revisedjulian(cjdn_);
   }
+  throw std::invalid_argument(
+      "invalid Calendar value: " +
+      std::to_string(static_cast<int>(calendar))
+  );
+}
 
-  virtual WeekDay weekday() const override {
-    static_assert(static_cast<int>(cc::WeekDay::Sun) == 0);
-    static_assert(static_cast<int>(cc::WeekDay::Mon) == 1);
-    static_assert(static_cast<int>(cc::WeekDay::Tue) == 2);
-    static_assert(static_cast<int>(cc::WeekDay::Wed) == 3);
-    static_assert(static_cast<int>(cc::WeekDay::Thu) == 4);
-    static_assert(static_cast<int>(cc::WeekDay::Fri) == 5);
-    static_assert(static_cast<int>(cc::WeekDay::Sat) == 6);
-    using Calc = CalculationInt<T>;
-    const Calc q = cjdn_ + 1;
-    const int x = static_cast<int>(floor_mod(q, Calc(7)));
-    return static_cast<WeekDay>(x);
-  }
 
+std::tuple<Month, Day> Date::md(Calendar calendar) const {
+  const auto result = ymd(calendar);
+  return {std::get<1>(result), std::get<2>(result)};
+}
+
+
+Year Date::year(Calendar calendar) const {
+  return std::get<0>(ymd(calendar));
+}
+
+
+Month Date::month(Calendar calendar) const {
+  return std::get<1>(ymd(calendar));
+}
+
+
+Day Date::day(Calendar calendar) const {
+  return std::get<2>(ymd(calendar));
+}
+
+
+flexint Date::cjdn() const {
+  return cjdn_;
+}
+
+
+WeekDay Date::weekday() const {
+  static_assert(static_cast<int>(cc::WeekDay::Sun) == 0);
+  static_assert(static_cast<int>(cc::WeekDay::Mon) == 1);
+  static_assert(static_cast<int>(cc::WeekDay::Tue) == 2);
+  static_assert(static_cast<int>(cc::WeekDay::Wed) == 3);
+  static_assert(static_cast<int>(cc::WeekDay::Thu) == 4);
+  static_assert(static_cast<int>(cc::WeekDay::Fri) == 5);
+  static_assert(static_cast<int>(cc::WeekDay::Sat) == 6);
+  const flexint q = cjdn_ + 1;
+  const int x = static_cast<int>(floor_mod(q, 7));
+  return static_cast<WeekDay>(x);
+}
+
+
+
+/*
   virtual bool increment_self(unsigned long long days) override {
     if constexpr (std::is_integral_v<T>) {
       if ( static_cast<unsigned long long>(std::numeric_limits<T>::max() - cjdn_) < days ) {
@@ -468,138 +661,8 @@ public:
       }
     }
   }
-}; // class DateCommonImplementation
 
-using ShortDate = DateCommonImplementation<std::int32_t>;
-using LongDate =  DateCommonImplementation<INT>;
 
-/*static*/ Date Date::now_utc(Calendar calendar) {
-  const std::chrono::year_month_day std_ymd {
-      std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now())
-  };
-  const auto now = Date(static_cast<int>(std_ymd.year()),
-                        static_cast<unsigned>(std_ymd.month()),
-                        static_cast<unsigned>(std_ymd.day()), Gregorian);
-  const auto [y, m, d] = now.ymd(calendar);
-  return Date(y, m, d, calendar);
-}
-
-/*static*/ const Date& Date::min() {
-  static const Date d (1, 1, 1, Gregorian);
-  return d;
-}
-
-/*static*/ const Date& Date::max() {
-  static const Date d (std::string(MAX_YEAR_DIGITS, '9'), 12, 31, RJulian);
-  return d;
-}
-
-Date::Date(const Year &year, Month m, Day d, Calendar calendar) {
-  if (!calendar_is_valid(calendar))
-    THROW<std::invalid_argument>("invalid Calendar value: ",
-                                 static_cast<int>(calendar));
-  if (m < 1 || m > 12)
-    THROW<std::invalid_argument>("invalid month value: ", m);
-  if (year.size() > MAX_YEAR_DIGITS)
-    THROW<std::invalid_argument>(
-        "year is too long: must be <= ", MAX_YEAR_DIGITS, " digits");
-  INT y{string_to_big_int(year)};
-  if (y < MIN_YEAR)
-    THROW<std::invalid_argument>("invalid year value: must be >= ", MIN_YEAR);
-  if (d < 1 || d > days_in_month(m, is_leap(y, calendar)))
-    THROW<std::invalid_argument>("invalid day value: ", d);
-  INT cjdn;
-  switch (calendar) {
-    static_assert(std::same_as<decltype(cjdn), INT>);
-    static_assert(std::same_as<decltype(y), INT>);
-  case Julian:
-    cjdn = julian_to_cjdn(y, m, d);
-    break;
-  case Gregorian:
-    cjdn = gregorian_to_cjdn(y, m, d);
-    break;
-  case RevisedJulian:
-    cjdn = revisedjulian_to_cjdn(y, m, d);
-    break;
-  }
-  if (cjdn < MIN_CJDN)
-    THROW<std::invalid_argument>("the minimum acceptable date is [dd-mm-yy]: "
-                                 "01-01-01 in Gregorian, and "
-                                 "03-01-01 in Julian calendars");
-  if (cjdn > std::numeric_limits<int32_t>::max()) {
-    pImpl = std::make_unique<LongDate>(cjdn);
-  } else {
-    pImpl = std::make_unique<ShortDate>(static_cast<std::int32_t>(cjdn));
-  }
-}
-
-Date::Date(const std::tuple<Year, Month, Day>& ymd, Calendar c)
-  : Date(std::get<0>(ymd), std::get<1>(ymd), std::get<2>(ymd), c) {}
-
-Date::Date(long long y, Month m, Day d, Calendar c)
-  : Date(std::to_string(y), m, d, c) {}
-
-void Date::swap(Date &other) noexcept { pImpl.swap(other.pImpl); }
-
-Date::Date(const Date &other) {
-  Implementation::check_valid_operation(other);
-  pImpl = other.pImpl->clone();
-}
-
-Date &Date::operator=(Date other) {
-  swap(other);
-  return *this;
-}
-
-std::strong_ordering Date::operator<=>(const Date& rhs) const {
-  Implementation::check_valid_comparison(*this, rhs);
-  const auto lhs_cjdn = pImpl->cjdn();
-  const auto rhs_cjdn = rhs.pImpl->cjdn();
-  if (lhs_cjdn < rhs_cjdn)
-      return std::strong_ordering::less;
-  if (lhs_cjdn > rhs_cjdn)
-      return std::strong_ordering::greater;
-  return std::strong_ordering::equal;
-}
-
-bool Date::operator==(const Date& rhs) const {
-    return (*this <=> rhs) == std::strong_ordering::equal;
-}
-
-std::string Date::cjdn() const {
-  Implementation::check_valid_operation(*this);
-  return pImpl->cjdn().str();
-}
-
-Year Date::year(Calendar c) const {
-  Implementation::check_valid_operation(*this);
-  return pImpl->year(c);
-}
-
-Month Date::month(Calendar c) const {
-  Implementation::check_valid_operation(*this);
-  return pImpl->month(c);
-}
-
-Day Date::day(Calendar c) const {
-  Implementation::check_valid_operation(*this);
-  return pImpl->day(c);
-}
-
-WeekDay Date::weekday() const {
-  Implementation::check_valid_operation(*this);
-  return pImpl->weekday();
-}
-
-std::tuple<Year, Month, Day> Date::ymd(Calendar c) const {
-  Implementation::check_valid_operation(*this);
-  return pImpl->ymd(c);
-}
-
-std::tuple<Month, Day> Date::md(Calendar c) const {
-  Implementation::check_valid_operation(*this);
-  return pImpl->md(c);
-}
 
 Date& Date::inc(unsigned long long days) {
   Implementation::check_valid_operation(*this);
@@ -619,12 +682,6 @@ Date& Date::dec(unsigned long long days) {
   }
   return *this;
 }
-
-Date::~Date() noexcept = default;
-Date::Date(Date &&) noexcept = default;
-
-void swap(Date &lhs, Date &rhs) noexcept {
-  lhs.swap(rhs);
-}
+*/
 
 } // namespace calendar_converter

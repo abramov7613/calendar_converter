@@ -1,14 +1,66 @@
 #pragma once
-#include <memory>
 #include <string>
 #include <tuple>
 #include <compare>
+#include <ostream>
+#include <ez3i/mpz.h>
 
 namespace calendar_converter {
 
-using Year = std::string;
+namespace ez3i = extracted_z3_integer ;
+
+class flexint {
+  ez3i::mpz m_num;
+
+public:
+  static ez3i::mpz_manager& m() ;
+  flexint();
+  flexint(int n) ;
+  flexint(const std::string& s) ;
+  flexint(flexint const& n) ;
+  flexint(flexint && n) noexcept ;
+  ~flexint() ;
+  explicit operator int() const ;
+  operator ez3i::mpz const &() const ;
+  operator ez3i::mpz&() ;
+  ez3i::mpz const & get() const ;
+  ez3i::mpz & get() ;
+  flexint & operator=(flexint const & n) ;
+  flexint & operator=(int n) ;
+  flexint & operator=(ez3i::mpz const & n) ;
+  void reset() ;
+  void swap(flexint & n) noexcept ;
+  void swap(ez3i::mpz & n) noexcept ;
+  bool is_zero() const ;
+  std::string str() const ;
+  flexint & operator+=(ez3i::mpz const & a) ;
+  flexint & operator-=(ez3i::mpz const & a) ;
+  flexint & operator*=(ez3i::mpz const & a) ;
+  flexint & operator/=(ez3i::mpz const & a) ;
+  flexint & operator%=(ez3i::mpz const & a) ;
+  friend flexint abs(flexint const& a) ;
+  friend bool is_zero(flexint const & a) ;
+  friend std::string to_string(flexint const& a) ;
+  friend bool operator==(flexint const & a, ez3i::mpz const & b) ;
+  friend bool operator!=(flexint const & a, ez3i::mpz const & b) ;
+  friend bool operator<(flexint const & a, ez3i::mpz const & b) ;
+  friend bool operator>(flexint const & a, ez3i::mpz const & b) ;
+  friend bool operator<=(flexint const & a, ez3i::mpz const & b) ;
+  friend bool operator>=(flexint const & a, ez3i::mpz const & b) ;
+  friend std::strong_ordering operator<=>(flexint const & a, ez3i::mpz const & b) ;
+  friend flexint operator+(flexint const & r1, ez3i::mpz const & r2) ;
+  friend flexint operator-(flexint const & r1, ez3i::mpz const & r2) ;
+  friend flexint operator*(flexint const & r1, ez3i::mpz const & r2) ;
+  friend flexint operator/(flexint const & r1, ez3i::mpz const & r2) ;
+  friend flexint operator%(flexint const & r1, ez3i::mpz const & r2) ;
+  friend std::ostream & operator<<(std::ostream & out, flexint const & s) ;
+}; // class flexint
+
+
+using Year = flexint;
 using Month = int;
 using Day = int;
+
 
 enum class Calendar { J, R, G };
 constexpr auto Gregorian = Calendar::G;
@@ -27,39 +79,37 @@ enum class WeekDay {
   Sat = 6
 };
 
+
 bool is_leap_year(const Year &year, Calendar calendar);
 bool is_leap_year(long long year, Calendar calendar);
 int days_in_month(Month month, bool leap);
 
+
 class Date {
-  class Implementation;
-  template <typename T> friend class DateCommonImplementation;
-  std::unique_ptr<Implementation> pImpl;
+  flexint cjdn_; // Chronological Julian Day Number
 
 public:
   static Date now_utc(Calendar = Gregorian);
   static const Date& min();
   static const Date& max();
-  ~Date() noexcept;
   Date(const Year&, Month, Day, Calendar = Gregorian);
   Date(const std::tuple<Year, Month, Day>&, Calendar = Gregorian);
   Date(long long, Month, Day, Calendar = Gregorian);
-  Date(const Date&);
-  Date(Date&&) noexcept;
-  Date& operator=(Date);
-  void swap(Date&) noexcept;
+  Date(const Date&) = default;
+  Date(Date&&) noexcept = default;
+  Date& operator=(const Date&) = default;
+  Date& operator=(Date&&) = default;
+  bool operator==(const Date&) const = default;
+  std::strong_ordering operator<=>(const Date&) const = default;
+  std::tuple<Year, Month, Day> ymd(Calendar = Gregorian) const;
+  std::tuple<Month, Day> md(Calendar = Gregorian) const;
   Year year(Calendar = Gregorian) const;
   Month month(Calendar = Gregorian) const;
   Day day(Calendar = Gregorian) const;
-  std::tuple<Year, Month, Day> ymd(Calendar = Gregorian) const;
-  std::tuple<Month, Day> md(Calendar = Gregorian) const;
-  std::string cjdn() const;
+  flexint cjdn() const;
   WeekDay weekday() const;
-  std::strong_ordering operator<=>(const Date&) const;
-  bool operator==(const Date&) const;
-  Date& inc(unsigned long long days); // increment self
-  Date& dec(unsigned long long days); // decrement self
-  friend void swap(Date &lhs, Date &rhs) noexcept;
+  //Date& inc(const flexint& days);
+  //Date& dec(const flexint& days);
 }; // class Date
 
 } // namespace calendar_converter
