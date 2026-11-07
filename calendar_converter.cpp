@@ -27,7 +27,7 @@ using cc::Year;
 
 constexpr std::int32_t MIN_CJDN = 1'721'426;
 constexpr std::int32_t MIN_YEAR = 1;
-constexpr std::size_t MAX_YEAR_DIGITS = 40;
+constexpr std::size_t MAX_YEAR_DIGITS = 70;
 
 
 template <typename T>
@@ -108,10 +108,10 @@ auto positive_rem_div(const T1& a, const T2& b) {
 
 constexpr bool calendar_is_valid(Calendar calendar) {
   switch (calendar) {
-  	case Gregorian:
-  	case Julian:
-  	case RevisedJulian:
-    	return true;
+    case Gregorian:
+    case Julian:
+    case RevisedJulian:
+      return true;
   }
   return false;
 }
@@ -122,19 +122,14 @@ bool is_leap(const flexint &year, const Calendar calendar) {
     THROW<std::invalid_argument>("invalid Calendar value: ",
                                  static_cast<int>(calendar));
   switch (calendar) {
-  case Julian:
-    return floor_mod(year, 4) == 0;
+    case Julian:
+      return year%4 == 0 ;
 
-  case Gregorian:
-    return floor_mod(year, 4) == 0 &&
-           (floor_mod(year, 100) != 0 ||
-            floor_mod(year, 400) == 0);
+    case Gregorian:
+      return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
 
-  case RevisedJulian:
-    return floor_mod(year, 4) == 0 &&
-           (floor_mod(year, 10) != 0 ||
-            floor_mod(year, 900) == 200 ||
-            floor_mod(year, 900) == 600);
+    case RevisedJulian:
+      return year % 4 == 0 && (year % 100 != 0 || year % 900 % 400 == 200);
   }
   return false;
 }
@@ -347,6 +342,30 @@ flexint & flexint::operator=(int n) {
 }
 
 
+flexint & flexint::operator=(char* s) {
+  *this = flexint(static_cast<const char*>(s)) ;
+  return *this;
+}
+
+
+flexint & flexint::operator=(const char* s) {
+  *this = flexint(std::string_view(s)) ;
+  return *this;
+}
+
+
+flexint & flexint::operator=(const std::string& s) {
+  *this = flexint(std::string_view(s.begin(), s.end()));
+  return *this;
+}
+
+
+flexint & flexint::operator=(std::string_view s) {
+  *this = flexint(s);
+  return *this;
+}
+
+
 flexint & flexint::operator=(ez3i::mpz const & n) {
   m().set(m_num, n);
   return *this;
@@ -387,7 +406,7 @@ flexint & flexint::operator*=(ez3i::mpz const & a) {
 
 
 flexint & flexint::operator/=(ez3i::mpz const & a) {
-  m().div(m_num, a, m_num);
+  m().machine_div(m_num, a, m_num);
   return *this;
 }
 

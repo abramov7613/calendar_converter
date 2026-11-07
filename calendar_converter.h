@@ -30,8 +30,12 @@ public:
   ez3i::mpz & get() ;
   flexint & operator=(flexint const & n) ;
   flexint & operator=(flexint&&) noexcept;
-  flexint & operator=(int n) ;
   flexint & operator=(ez3i::mpz const & n) ;
+  flexint & operator=(int n) ;
+  flexint & operator=(char* s) ;
+  flexint & operator=(const char* s) ;
+  flexint & operator=(const std::string& s) ;
+  flexint & operator=(std::string_view s) ;
   void reset() ;
   void swap(flexint & n) noexcept ;
   void swap(ez3i::mpz & n) noexcept ;
