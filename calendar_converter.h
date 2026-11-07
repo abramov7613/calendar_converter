@@ -16,7 +16,10 @@ public:
   static ez3i::mpz_manager& m() ;
   flexint();
   flexint(int n) ;
+  flexint(char* s) ;
+  flexint(const char* s) ;
   flexint(const std::string& s) ;
+  flexint(std::string_view s) ;
   flexint(flexint const& n) ;
   flexint(flexint && n) noexcept ;
   ~flexint() ;
@@ -26,6 +29,7 @@ public:
   ez3i::mpz const & get() const ;
   ez3i::mpz & get() ;
   flexint & operator=(flexint const & n) ;
+  flexint & operator=(flexint&&) noexcept;
   flexint & operator=(int n) ;
   flexint & operator=(ez3i::mpz const & n) ;
   void reset() ;
@@ -40,6 +44,7 @@ public:
   flexint & operator%=(ez3i::mpz const & a) ;
   friend flexint abs(flexint const& a) ;
   friend bool is_zero(flexint const & a) ;
+  friend void swap(flexint & a, flexint & b) noexcept ;
   friend std::string to_string(flexint const& a) ;
   friend bool operator==(flexint const & a, ez3i::mpz const & b) ;
   friend bool operator!=(flexint const & a, ez3i::mpz const & b) ;
@@ -80,8 +85,7 @@ enum class WeekDay {
 };
 
 
-bool is_leap_year(const Year &year, Calendar calendar);
-bool is_leap_year(long long year, Calendar calendar);
+bool is_leap_year(const Year &, Calendar);
 int days_in_month(Month month, bool leap);
 
 
@@ -94,7 +98,6 @@ public:
   static const Date& max();
   Date(const Year&, Month, Day, Calendar = Gregorian);
   Date(const std::tuple<Year, Month, Day>&, Calendar = Gregorian);
-  Date(long long, Month, Day, Calendar = Gregorian);
   Date(const Date&) = default;
   Date(Date&&) noexcept = default;
   Date& operator=(const Date&) = default;
@@ -108,6 +111,8 @@ public:
   Day day(Calendar = Gregorian) const;
   flexint cjdn() const;
   WeekDay weekday() const;
+  void swap(Date&) noexcept;
+  friend void swap(Date&, Date&) noexcept ;
   //Date& inc(const flexint& days);
   //Date& dec(const flexint& days);
 }; // class Date

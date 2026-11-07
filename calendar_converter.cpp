@@ -284,7 +284,7 @@ flexint::flexint(){}
 flexint::flexint(int n) { m().set(m_num, n); }
 
 
-flexint::flexint(const std::string& s) {
+flexint::flexint(std::string_view s) {
   if (s.empty()) {
     THROW<std::invalid_argument>("empty year");
   }
@@ -300,6 +300,15 @@ flexint::flexint(const std::string& s) {
   }
   result.swap(*this);
 }
+
+
+flexint::flexint(const char* s) : flexint(std::string_view(s)) {}
+
+
+flexint::flexint(char* s) : flexint(static_cast<const char*>(s)) {}
+
+
+flexint::flexint(const std::string& s) : flexint(std::string_view(s.begin(), s.end())) {}
 
 
 flexint::flexint(flexint const& n) { m().set(m_num, n.m_num); }
@@ -327,9 +336,14 @@ ez3i::mpz & flexint::get() { return m_num; }
 
 
 flexint & flexint::operator=(flexint const & n) {
-  if (this == &n)
-      return *this;
+  if (this == &n) return *this;
   m().set(m_num, n.m_num);
+  return *this;
+}
+
+
+flexint & flexint::operator=(flexint&& n) noexcept {
+  if (this != &n) m().swap(m_num, n.m_num);
   return *this;
 }
 
@@ -438,6 +452,11 @@ bool is_zero(flexint const & a) {
 }
 
 
+void swap(flexint& a, flexint& b) noexcept {
+  a.swap(b);
+}
+
+
 std::string flexint::str() const {
   return m().to_string(m_num);
 }
@@ -491,11 +510,6 @@ bool is_leap_year(const Year &year, Calendar calendar) {
 }
 
 
-bool is_leap_year(long long year, Calendar calendar) {
-  return is_leap(year, calendar);
-}
-
-
 int days_in_month(Month month, bool is_leap_year) {
   return m_length(month, is_leap_year);
 }
@@ -528,16 +542,18 @@ int days_in_month(Month month, bool is_leap_year) {
 
 
 Date::Date(const Year &year, Month m, Day d, Calendar calendar) {
+  static const flexint max_rjulian_year_value (std::string(MAX_YEAR_DIGITS, '9'));
   if (!calendar_is_valid(calendar)) THROW<std::invalid_argument>(
       "invalid Calendar value: ",
       static_cast<int>(calendar)
   );
-  if (year < MIN_YEAR || year > max().year()) THROW<std::invalid_argument>(
+  if (year < MIN_YEAR) THROW<std::invalid_argument>(
       "invalid year value: must be >= ",
-      MIN_YEAR,
-      " && <= ",
-      std::string(MAX_YEAR_DIGITS, '9')
+      MIN_YEAR
   );
+  if (calendar == RJulian && year > max_rjulian_year_value) {
+    THROW<std::invalid_argument>("year value is too long");
+  }
   if (m < 1 || m > 12)
     THROW<std::invalid_argument>("invalid month value: ", m);
   if (d < 1 || d > days_in_month(m, is_leap(year, calendar)))
@@ -558,16 +574,16 @@ Date::Date(const Year &year, Month m, Day d, Calendar calendar) {
       "01-01-01 in Gregorian, and "
       "03-01-01 in Julian calendars"
   );
+  if (calendar != RJulian) {
+    if (auto [y,m,d] = cjdn_to_revisedjulian(cjdn_); y > max_rjulian_year_value) {
+      THROW<std::invalid_argument>("year value is too long");
+    }
+  }
 }
 
 
 Date::Date(const std::tuple<Year, Month, Day>& ymd, Calendar c)
   : Date(std::get<0>(ymd), std::get<1>(ymd), std::get<2>(ymd), c)
-{
-}
-
-
-Date::Date(long long y, Month m, Day d, Calendar c) : Date(Year(y), m, d, c)
 {
 }
 
@@ -622,6 +638,16 @@ WeekDay Date::weekday() const {
   const flexint q = cjdn_ + 1;
   const int x = static_cast<int>(floor_mod(q, 7));
   return static_cast<WeekDay>(x);
+}
+
+
+void Date::swap(Date& d) noexcept {
+  std::swap(*this, d);
+}
+
+
+void swap(Date& d1, Date& d2) noexcept {
+  d1.swap(d2);
 }
 
 

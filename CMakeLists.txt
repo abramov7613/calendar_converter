@@ -17,7 +17,7 @@ add_library(${PROJECT_NAME} STATIC
   calendar_converter.cpp
 )
 
-target_link_libraries(${PROJECT_NAME} PRIVATE ez3i)
+target_link_libraries(${PROJECT_NAME} PUBLIC ez3i)
 
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_20)
 

@@ -30,7 +30,7 @@ void expect_round_trip(const std::string &year, cc::Month month, cc::Day day,
                        cc::Calendar calendar) {
   const cc::Date original(year, month, day, calendar);
 
-  const std::string cjdn = original.cjdn();
+  const std::string cjdn = original.cjdn().str();
 
   // Reconstruct through Gregorian, then compare CJDN.
   const cc::Date from_gregorian(original.year(cc::Gregorian),
@@ -345,13 +345,13 @@ TEST(CalendarConverter, CjdnFitsIntoInt32AtMaximum) {
 
   const auto cjdn = date.cjdn();
 
-  EXPECT_FALSE(cjdn.empty());
+  EXPECT_FALSE(cjdn.is_zero());
 }
 
 TEST(CalendarConverter, DateBeyondInt32CjdnUsesBigIntegerPath) {
   const cc::Date date("100000000", 1, 1, cc::Gregorian);
 
-  const std::string cjdn = date.cjdn();
+  const std::string cjdn = date.cjdn().str();
 
   // The CJDN is far beyond INT32_MAX.
   EXPECT_GT(cjdn.size(),
@@ -362,13 +362,13 @@ TEST(CalendarConverter, LargeCjdnRemainsExact) {
   const cc::Date date("100000000000000000000000000000000000000", 12, 31,
                       cc::Gregorian);
 
-  const std::string cjdn1 = date.cjdn();
+  const std::string cjdn1 = date.cjdn().str();
 
   const cc::Date reconstructed(date.year(cc::Gregorian),
                                date.month(cc::Gregorian),
                                date.day(cc::Gregorian), cc::Gregorian);
 
-  const std::string cjdn2 = reconstructed.cjdn();
+  const std::string cjdn2 = reconstructed.cjdn().str();
 
   EXPECT_EQ(cjdn1, cjdn2);
 }
@@ -664,7 +664,7 @@ TEST(CalendarConverter, LargeYearConversionDoesNotWrapAround) {
   EXPECT_EQ(date.cjdn(), same.cjdn());
 
   // A wrapped int32_t result would not preserve the CJDN.
-  EXPECT_GT(date.cjdn().size(),
+  EXPECT_GT(date.cjdn().str().size(),
             std::to_string(std::numeric_limits<std::int32_t>::max()).size());
 }
 
@@ -688,7 +688,7 @@ TEST(CalendarConverter, TodayUtcProducesValidDate) {
 
   const auto [year, month, day] = today.ymd(cc::Gregorian);
 
-  EXPECT_FALSE(year.empty());
+  EXPECT_FALSE(year.is_zero());
   EXPECT_GE(month, 1);
   EXPECT_LE(month, 12);
   EXPECT_GE(day, 1);
@@ -702,7 +702,7 @@ TEST(CalendarConverter, TodayCanBeRepresentedInAllCalendars) {
   for (const auto calendar : {cc::Gregorian, cc::Julian, cc::RevisedJulian}) {
     const auto [year, month, day] = today.ymd(calendar);
 
-    EXPECT_FALSE(year.empty());
+    EXPECT_FALSE(year.is_zero());
     EXPECT_GE(month, 1);
     EXPECT_LE(month, 12);
     EXPECT_GE(day, 1);

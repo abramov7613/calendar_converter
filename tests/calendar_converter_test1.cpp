@@ -23,7 +23,7 @@ struct DateParts {
 
 DateParts parts(const Date &date, Calendar calendar) {
   auto [year, month, day] = date.ymd(calendar);
-  return {year, month, day};
+  return {year.str(), month, day};
 }
 
 void expect_date(const Date &date, Calendar calendar, const char *expected_year,
@@ -197,7 +197,7 @@ TEST(CalendarConverter, VeryLargeYear) {
 
   expect_date(date, Gregorian, "1000000000000000000000000000000000000", 1, 1);
 
-  EXPECT_FALSE(date.cjdn().empty());
+  EXPECT_FALSE(date.cjdn().is_zero());
 }
 
 TEST(CalendarConverter, LargeYearRoundTrip) {
