@@ -55,33 +55,12 @@ template<typename T1, typename T2> requires (
   (std::same_as<T2, int> || std::same_as<T2, flexint>)
 )
 auto floor_div(const T1& a, const T2& b) {
-    if ( b == 0 ) THROW<std::invalid_argument>("Division by zero");
     using ResultType = std::conditional_t<
       std::is_same_v<T1, flexint> || std::is_same_v<T2, flexint>,
       flexint,
       int
     >;
-    ResultType q = a / b;
-    ResultType r = a % b;
-    return (r!=0 && ((a < 0) != (b < 0))) ? q - 1 : q;
-}
-
-
-template<typename T1, typename T2> requires (
-  (std::same_as<T1, int> || std::same_as<T1, flexint>) &&
-  (std::same_as<T2, int> || std::same_as<T2, flexint>)
-)
-auto floor_mod(const T1& a, const T2& b) {
-    if (b <= 0)
-      THROW<std::invalid_argument>("Modulus must be positive");
-    using ResultType = std::conditional_t<
-      std::is_same_v<T1, flexint> || std::is_same_v<T2, flexint>,
-      flexint,
-      int
-    >;
-    ResultType r = a % b;
-    if (r < 0)
-      r += b;
+    ResultType r = (a - (a < 0 ? b - 1 : 0)) / b ;
     return r;
 }
 
@@ -90,9 +69,23 @@ template<typename T1, typename T2> requires (
   (std::same_as<T1, int> || std::same_as<T1, flexint>) &&
   (std::same_as<T2, int> || std::same_as<T2, flexint>)
 )
-auto euclidean_div(const T1& a, const T2& b) {
-    // Euclidean division: a = q * b + r, where 0 <= r < abs(b)
-    if (b == 0) THROW<std::invalid_argument>("Division by zero");
+auto floor_mod(const T1& a, const T2& b) {
+    using ResultType = std::conditional_t<
+      std::is_same_v<T1, flexint> || std::is_same_v<T2, flexint>,
+      flexint,
+      int
+    >;
+    ResultType r = a - floor_div(a, b) * b ;
+    return r;
+}
+
+
+template<typename T1, typename T2> requires (
+  (std::same_as<T1, int> || std::same_as<T1, flexint>) &&
+  (std::same_as<T2, int> || std::same_as<T2, flexint>)
+)
+auto positive_rem_div(const T1& a, const T2& b) {
+    // positive remainder division: a = q * b + r, where 0 <= r < abs(b)
     using ResultType = std::conditional_t<
       std::is_same_v<T1, flexint> || std::is_same_v<T2, flexint>,
       flexint,
@@ -178,7 +171,7 @@ flexint gregorian_to_cjdn(const flexint& year, Month m, Day d)
   const int c0 = floor_div(m - 3, 12);
   const int x1 = m - 12 * c0 - 3;
   const flexint x4 = year + c0;
-  auto [x3, x2] = euclidean_div(x4, 100);
+  auto [x3, x2] = positive_rem_div(x4, 100);
   flexint result = d + 1721119;
   result += floor_div(146097 * x3, 4);
   result += floor_div(36525 * x2, 100);
@@ -221,9 +214,9 @@ std::tuple<Year, Month, Day> cjdn_to_gregorian(const flexint& cjdn)
 // Dr Louis Strous's method:
 // https://aa.quae.nl/en/reken/juliaansedag.html#3_2
 {
-  auto [x3, r3] = euclidean_div(4 * cjdn - 6884477, 146097);
-  auto [x2, r2] = euclidean_div(100 * floor_div(r3, 4) + 99, 36525);
-  auto [x1, r1] = euclidean_div(5 * floor_div(r2, 100) + 2, 153);
+  auto [x3, r3] = positive_rem_div(4 * cjdn - 6884477, 146097);
+  auto [x2, r2] = positive_rem_div(100 * floor_div(r3, 4) + 99, 36525);
+  auto [x1, r1] = positive_rem_div(5 * floor_div(r2, 100) + 2, 153);
   const auto c0 = static_cast<int>(floor_div(x1 + 2, 12));
   const auto d = static_cast<int>(floor_div(r1, 5) + 1);
   const auto m = static_cast<int>(x1 - 12 * c0 + 3);
