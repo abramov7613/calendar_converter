@@ -7,6 +7,10 @@
 
 namespace calendar_converter {
 
+constexpr std::int32_t MIN_YEAR = 1;
+constexpr std::size_t MAX_YEAR_DIGITS = 70;
+
+
 using Year = flexint;
 using Month = int;
 using Day = int;
@@ -43,6 +47,7 @@ public:
   static const Date& max();
   Date(const Year&, Month, Day, Calendar = Gregorian);
   Date(const std::tuple<Year, Month, Day>&, Calendar = Gregorian);
+  Date(flexint cjdn);
   Date(const Date&) = default;
   Date(Date&&) noexcept = default;
   Date& operator=(const Date&) = default;
@@ -58,8 +63,8 @@ public:
   WeekDay weekday() const;
   void swap(Date&) noexcept;
   friend void swap(Date&, Date&) noexcept ;
-  //Date& inc(const flexint& days);
-  //Date& dec(const flexint& days);
+  Date increment(const flexint& days);
+  Date decrement(const flexint& days);
 }; // class Date
 
 } // namespace calendar_converter

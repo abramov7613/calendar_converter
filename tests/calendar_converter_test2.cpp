@@ -167,9 +167,16 @@ TEST(CalendarConverter, EmptyYearIsRejected) {
   EXPECT_THROW(cc::Date("", 1, 1), std::invalid_argument);
 }
 
-TEST(CalendarConverter, NonDecimalYearIsRejected) {
+TEST(CalendarConverter, TooLongYearIsRejected) {
+  EXPECT_THROW(cc::Date(std::string(cc::MAX_YEAR_DIGITS+5, '9'), 1, 1), std::invalid_argument);
+}
+
+TEST(CalendarConverter, NegativeYearIsRejected) {
   EXPECT_THROW(cc::Date("-1", 1, 1), std::invalid_argument);
   EXPECT_THROW(cc::Date(-1, 1, 1), std::invalid_argument);
+}
+
+TEST(CalendarConverter, NonDecimalYearIsRejected) {
   EXPECT_THROW(cc::Date("1a", 1, 1), std::invalid_argument);
   EXPECT_THROW(cc::Date("1 2", 1, 1), std::invalid_argument);
 }

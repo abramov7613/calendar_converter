@@ -23,11 +23,11 @@ using cc::Month;
 using cc::RevisedJulian;
 using cc::WeekDay;
 using cc::Year;
+using cc::MIN_YEAR;
+using cc::MAX_YEAR_DIGITS;
 
 
 constexpr std::int32_t MIN_CJDN = 1'721'426;
-constexpr std::int32_t MIN_YEAR = 1;
-constexpr std::size_t MAX_YEAR_DIGITS = 70;
 
 
 template <typename T>
@@ -255,6 +255,22 @@ std::tuple<Year, Month, Day> cjdn_to_revisedjulian(const flexint &cjdn)
   return {y, m, d};
 }
 
+
+const flexint& MAX_CJDN() {
+  static const flexint result = revisedjulian_to_cjdn(
+    std::string(MAX_YEAR_DIGITS, '9'),
+    12,
+    31
+  );
+  return result;
+}
+
+
+bool check_cjdn(const flexint& cjdn) {
+  if (cjdn < MIN_CJDN || cjdn > MAX_CJDN()) return false;
+  return true;
+}
+
 } // namespace
 
 
@@ -286,19 +302,18 @@ int days_in_month(Month month, bool is_leap_year) {
 
 
 /*static*/ const Date& Date::min() {
-  static const Date d (1, 1, 1, Gregorian);
+  static const Date d (MIN_CJDN);
   return d;
 }
 
 
 /*static*/ const Date& Date::max() {
-  static const Date d (std::string(MAX_YEAR_DIGITS, '9'), 12, 31, RJulian);
+  static const Date d (MAX_CJDN());
   return d;
 }
 
 
 Date::Date(const Year &year, Month m, Day d, Calendar calendar) {
-  static const flexint max_rjulian_year_value (std::string(MAX_YEAR_DIGITS, '9'));
   if (!calendar_is_valid(calendar)) THROW<std::invalid_argument>(
       "invalid Calendar value: ",
       static_cast<int>(calendar)
@@ -307,9 +322,6 @@ Date::Date(const Year &year, Month m, Day d, Calendar calendar) {
       "invalid year value: must be >= ",
       MIN_YEAR
   );
-  if (calendar == RJulian && year > max_rjulian_year_value) {
-    THROW<std::invalid_argument>("year value is too long");
-  }
   if (m < 1 || m > 12)
     THROW<std::invalid_argument>("invalid month value: ", m);
   if (d < 1 || d > days_in_month(m, is_leap(year, calendar)))
@@ -325,22 +337,30 @@ Date::Date(const Year &year, Month m, Day d, Calendar calendar) {
       cjdn_ = revisedjulian_to_cjdn(year, m, d);
       break;
   }
-  if (cjdn_ < MIN_CJDN) THROW<std::invalid_argument>(
-      "the minimum acceptable date is [dd-mm-yy]: "
-      "01-01-01 in Gregorian, and "
-      "03-01-01 in Julian calendars"
+  if (!check_cjdn(cjdn_)) THROW<std::invalid_argument>(
+    "cjdn value is out of range [",
+    MIN_CJDN,
+    ", ",
+    MAX_CJDN(),
+    "]"
   );
-  if (calendar != RJulian) {
-    if (auto [y,m,d] = cjdn_to_revisedjulian(cjdn_); y > max_rjulian_year_value) {
-      THROW<std::invalid_argument>("year value is too long");
-    }
-  }
 }
 
 
 Date::Date(const std::tuple<Year, Month, Day>& ymd, Calendar c)
   : Date(std::get<0>(ymd), std::get<1>(ymd), std::get<2>(ymd), c)
 {
+}
+
+
+Date::Date(flexint cjdn) : cjdn_(std::move(cjdn)) {
+  if (!check_cjdn(cjdn_)) THROW<std::invalid_argument>(
+    "cjdn value is out of range [",
+    MIN_CJDN,
+    ", ",
+    MAX_CJDN(),
+    "]"
+  );
 }
 
 
@@ -407,63 +427,18 @@ void swap(Date& d1, Date& d2) noexcept {
 }
 
 
-
-/*
-  virtual bool increment_self(unsigned long long days) override {
-    if constexpr (std::is_integral_v<T>) {
-      if ( static_cast<unsigned long long>(std::numeric_limits<T>::max() - cjdn_) < days ) {
-        return false;
-      }
-      cjdn_ += static_cast<T>(days);
-      return true;
-    } else {
-      cjdn_ += days;
-      return true;
-    }
-  }
-
-  virtual bool decrement_self(unsigned long long days) override {
-    if constexpr (std::is_integral_v<T>) {
-      if (const auto x1 = static_cast<unsigned long long>(cjdn_); x1 > days) {
-        if (const auto x2 = x1 - days; x2 >= MIN_CJDN && x2 <= std::numeric_limits<T>::max()) {
-          cjdn_ = static_cast<T>(x2);
-          return true;
-        } else {
-          return false;
-        }
-      } else {
-        return false;
-      }
-    } else {
-      if (const auto x = cjdn_ - days; x >= MIN_CJDN) {
-        cjdn_ = x;
-        return true;
-      } else {
-        return false;
-      }
-    }
-  }
-
-
-
-Date& Date::inc(unsigned long long days) {
-  Implementation::check_valid_operation(*this);
-  if (!pImpl->increment_self(days)) {
-    pImpl = std::make_unique<LongDate>(pImpl->cjdn());
-    [[maybe_unused]] const bool ok = pImpl->increment_self(days);
-    assert(ok);
-  }
+Date Date::increment(const flexint& days) {
+  auto new_cjdn = cjdn_ += days;
+  if (check_cjdn(new_cjdn)) return {new_cjdn};
   return *this;
 }
 
-Date& Date::dec(unsigned long long days) {
-  Implementation::check_valid_operation(*this);
-  if (!pImpl->decrement_self(days)) {
-    auto d = Date::min();
-    d.swap(*this);
-  }
+
+Date Date::decrement(const flexint& days) {
+  auto new_cjdn = cjdn_ -= days;
+  if (check_cjdn(new_cjdn)) return {new_cjdn};
   return *this;
 }
-*/
+
 
 } // namespace calendar_converter
