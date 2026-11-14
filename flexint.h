@@ -45,8 +45,8 @@ public:
   friend bool is_zero(flexint const & a) ;
   friend void swap(flexint & a, flexint & b) noexcept ;
   friend std::string to_string(flexint const& a) ;
-  friend bool operator==(flexint const & a, z3i::mpz const & b) ;
-  friend std::strong_ordering operator<=>(flexint const & a, z3i::mpz const & b) ;
+  friend bool operator==(flexint const & a, flexint const & b) ;
+  friend std::strong_ordering operator<=>(flexint const & a, flexint const & b) ;
   friend flexint operator+(flexint const & r1, z3i::mpz const & r2) ;
   friend flexint operator-(flexint const & r1, z3i::mpz const & r2) ;
   friend flexint operator*(flexint const & r1, z3i::mpz const & r2) ;

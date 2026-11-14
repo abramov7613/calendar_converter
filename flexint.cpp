@@ -193,12 +193,12 @@ flexint & flexint::operator%=(z3i::mpz const & a) {
 }
 
 
-bool operator==(flexint const & a, z3i::mpz const & b) {
+bool operator==(flexint const & a, flexint const & b) {
   return a.m().eq(a, b);
 }
 
 
-std::strong_ordering operator<=>(flexint const& a, z3i::mpz const& b) {
+std::strong_ordering operator<=>(flexint const& a, flexint const& b) {
   return a.m().cmp(a, b) <=> 0;
 }
 
