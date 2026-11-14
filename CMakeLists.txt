@@ -8,13 +8,15 @@ include(FetchContent)
 FetchContent_Declare(
     ez3i
     GIT_REPOSITORY https://github.com/abramov7613/extracted_z3_integer.git
-    GIT_TAG        v1.0.4
+    GIT_TAG        v1.1.0
 )
 FetchContent_MakeAvailable(ez3i)
 
 add_library(${PROJECT_NAME} STATIC
   calendar_converter.h
   calendar_converter.cpp
+  flexint.h
+  flexint.cpp
 )
 
 target_link_libraries(${PROJECT_NAME} PUBLIC ez3i)

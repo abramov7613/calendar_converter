@@ -160,6 +160,7 @@ TEST(CalendarConverter, InvalidDayIsRejected) {
 
 TEST(CalendarConverter, YearZeroIsRejected) {
   EXPECT_THROW(cc::Date("0", 1, 1), std::invalid_argument);
+  EXPECT_THROW(cc::Date(0, 1, 1), std::invalid_argument);
 }
 
 TEST(CalendarConverter, EmptyYearIsRejected) {
@@ -168,11 +169,8 @@ TEST(CalendarConverter, EmptyYearIsRejected) {
 
 TEST(CalendarConverter, NonDecimalYearIsRejected) {
   EXPECT_THROW(cc::Date("-1", 1, 1), std::invalid_argument);
-
-  EXPECT_THROW(cc::Date("+1", 1, 1), std::invalid_argument);
-
+  EXPECT_THROW(cc::Date(-1, 1, 1), std::invalid_argument);
   EXPECT_THROW(cc::Date("1a", 1, 1), std::invalid_argument);
-
   EXPECT_THROW(cc::Date("1 2", 1, 1), std::invalid_argument);
 }
 
