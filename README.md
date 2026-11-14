@@ -1,13 +1,15 @@
 # Calendar Converter
 
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
-[![CMake](https://img.shields.io/badge/CMake-3.31%2B-064F8C.svg)](https://cmake.org/)
+[![CMake](https://img.shields.io/badge/CMake-3.31%2B-blue.svg)](https://cmake.org/)
 [![ez3i](https://img.shields.io/badge/dependency-ez3i-7C3AED.svg)](https://github.com/abramov7613/extracted_z3_integer)
-[![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![build & test](https://github.com/abramov7613/calendar_converter/actions/workflows/cmake-multi-platform.yml/badge.svg)](https://github.com/abramov7613/calendar_converter/actions/workflows/cmake-multi-platform.yml)
 
-A C++20 library for calendrical calculations and date conversion between the Gregorian, Julian, and Revised Julian calendars.
+A C++20 library for working with dates and converting between the **Gregorian**, **Julian**, and **Revised Julian** calendars.
 
-The project stores each date as a single absolute Chronological Julian Day Number (CJDN) and exposes the same logical day in any supported calendar. It also supports very large year values through an arbitrary-precision integer implementation backed by `ez3i`.
+The library uses the **Chronological Julian Day Number (CJDN)** as a common internal representation. This allows the same `Date` object to be represented in any supported calendar and makes date comparison independent of the calendar in which a date was originally created.
+
+The project is particularly suitable as a low-level component for applications dealing with historical chronology, date conversion, astronomical calculations, genealogy, archival data, or any software where several calendar systems need to coexist.
 
 ## Features
 
@@ -21,17 +23,59 @@ The project stores each date as a single absolute Chronological Julian Day Numbe
 
 ## Supported calendars
 
-The library exposes:
+The library exposes three calendar constants:
 
-- `calendar_converter::Gregorian`
-- `calendar_converter::Julian`
-- `calendar_converter::RevisedJulian` (alias `calendar_converter::RJulian`)
+| Calendar       | Constant        | Leap-year rule                                        |
+| -------------- | --------------- | ----------------------------------------------------- |
+| Gregorian      | `Gregorian`     | Divisible by 4, except centuries not divisible by 400 |
+| Julian         | `Julian`        | Divisible by 4                                        |
+| Revised Julian | `RJulian`       | Revised Julian leap-year rule                         |
 
-Leap-year behavior:
+The Revised Julian leap-year calculation implemented by the library follows the rule based on the remainder of the year modulo 900. There are 218 leap years in a 900-year cycle, giving an average year length of approximately 365.242222 days. An important consequence is that the Revised Julian and Gregorian calendars coincide for long periods but do not have identical long-term leap-year rules.
 
-- Gregorian: divisible by 4, except centuries not divisible by 400
-- Julian: divisible by 4
-- Revised Julian: follows the historical revised-Julian cycle, including the 900-year rule
+## How It Works
+
+A date is converted into a **Chronological Julian Day Number (CJDN)**. Conceptually:
+
+```text
+               ┌───────────────────────────────────────────┐
+               │   Gregorian / Julian / Revised Julian     │
+               └───────────────────────────────────────────┘
+                                   │
+                                   ▼
+                          ┌─────────────────┐
+                          │      CJDN       │
+                          │                 │
+                          │ common internal │
+                          │ representation  │
+                          └────────┬────────┘
+                                   │
+          ┌────────────────────────┐───────────────────────┐
+          ▼                        ▼                       ▼
+  ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+  │     Julian      │     │    Gregorian    │     │ Revised Julian  │
+  └─────────────────┘     └─────────────────┘     └─────────────────┘
+```
+
+This means that a date does not permanently belong to the calendar used during construction.
+
+For example:
+
+```cpp
+Date date(2025, 1, 1, Gregorian);
+```
+
+can later be queried as:
+
+```cpp
+date.ymd(Gregorian);
+date.ymd(Julian);
+date.ymd(RJulian);
+```
+
+Internally, comparisons are performed using CJDN, so two dates representing the same physical calendar day compare equal even if they were constructed using different calendars. The implementation uses the PImpl idiom for Date, keeping implementation details out of the public header. The combination of PImpl and the CJDN-based model keeps the public API small while allowing the arithmetic implementation to evolve independently.
+
+> **Note:** The CJDN used by this project should not be confused with the **Julian calendar**. A Julian Day Number is an absolute day count used as a numerical representation of a date, while the Julian calendar is a civil calendar that can itself be represented using that count.
 
 ## Requirements
 
@@ -69,7 +113,7 @@ using namespace calendar_converter;
 
 Date gregorian(2025, 1, 1, Gregorian);
 Date julian(2025, 1, 1, Julian);
-Date revised(2025, 1, 1, RevisedJulian);
+Date revised(2025, 1, 1, RJulian);
 ```
 
 You can also pass year values as strings for very large years:
@@ -97,7 +141,7 @@ const Date date(2025, 1, 1, Gregorian);
 
 const auto [g_year, g_month, g_day] = date.ymd(Gregorian);
 const auto [j_year, j_month, j_day] = date.ymd(Julian);
-const auto [r_year, r_month, r_day] = date.ymd(RevisedJulian);
+const auto [r_year, r_month, r_day] = date.ymd(RJulian);
 
 std::cout << "Gregorian: " << g_year.str() << '-' << g_month << '-' << g_day << '\n';
 std::cout << "Julian:    " << j_year.str() << '-' << j_month << '-' << j_day << '\n';
@@ -204,11 +248,11 @@ calendar_converter/
 ├── calendar_converter.cpp
 ├── flexint.h
 ├── flexint.cpp
-├── tests/
-│   ├── calendar_converter_test1.cpp
-│   ├── calendar_converter_test2.cpp
-│   └── calendar_converter_test3.cpp
-└── .github/
+└── tests/
+    ├── calendar_converter_test1.cpp
+    ├── calendar_converter_test2.cpp
+    ├── calendar_converter_test3.cpp
+    └── CMakeLists.txt
 ```
 
 ## API overview
@@ -228,6 +272,48 @@ calendar_converter/
 - `is_leap_year(year, calendar)`
 - `days_in_month(month, leap)`
 
-## License
+## Algorithms and Dr. Louis Strous
 
-This project is licensed under the GNU General Public License v3.0. See [LICENSE](LICENSE) for the full text.
+The calendar conversion algorithms used by this project are based on the work of **Dr. Louis Strous**. The source code explicitly credits Strous in the implementation comments.
+
+A particularly relevant reference is Dr. Strous' **Astronomy Answers — Modern Calendars**, which describes algorithms and astronomical/calendar relationships used for computational calendar conversion. The work is associated with the **University of Utrecht** and provides material relevant to Gregorian, Julian, and Revised Julian calendar calculations.
+
+The implementation in this project follows the same general computational approach: calendar dates are converted to a common day-number representation and can subsequently be converted back into the desired calendar.
+
+Conceptually:
+
+```text
+Gregorian ────────┐  
+                  │           ┌────► Gregorian
+Julian ───────────┼──►  CJDN  ├────► Julian
+                  │           └────► Revised Julian
+Revised Julian ───┘  
+```
+
+This intermediate representation avoids the need to implement independent conversion formulas for every pair of calendars.
+
+## References
+
+### Primary algorithm reference
+
+**Louis Strous — Astronomy Answers: Modern Calendars**
+
+[Louis Strous — Astronomy Answers: Modern Calendars](https://aa.quae.nl/en/antwoorden/moderne_kalenders.html)
+
+### Astronomy Answers
+
+Collection of astronomical and calendar-related material by Louis Strous.
+
+[Astronomy Answers — Louis Strous' collection of astronomical and calendar material](https://aa.quae.nl/)
+
+### Fourmilab Calendar Converter
+
+An independent implementation and reference for Julian Day Numbers and civil-calendar conversion.
+
+[Fourmilab Calendar Converter](https://www.fourmilab.ch/documents/calendar)
+
+### Related calendar arithmetic
+
+The general approach of representing calendar dates through a continuous numerical day count is also used by other calendar-arithmetic implementations.
+
+[Soroush's libcalendars — calendar arithmetic algorithms](https://github.com/soroush/libcalendars)
