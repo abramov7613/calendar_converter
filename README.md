@@ -73,7 +73,7 @@ date.ymd(Julian);
 date.ymd(RJulian);
 ```
 
-Internally, comparisons are performed using CJDN, so two dates representing the same physical calendar day compare equal even if they were constructed using different calendars. The implementation uses the PImpl idiom for Date, keeping implementation details out of the public header. The combination of PImpl and the CJDN-based model keeps the public API small while allowing the arithmetic implementation to evolve independently.
+Internally, comparisons are performed using CJDN, so two dates representing the same physical calendar day compare equal even if they were constructed using different calendars. 
 
 > **Note:** The CJDN used by this project should not be confused with the **Julian calendar**. A Julian Day Number is an absolute day count used as a numerical representation of a date, while the Julian calendar is a civil calendar that can itself be represented using that count.
 
