@@ -428,16 +428,18 @@ void swap(Date& d1, Date& d2) noexcept {
 
 
 Date Date::increment(const flexint& days) {
-  auto new_cjdn = cjdn_ += days;
-  if (check_cjdn(new_cjdn)) return {new_cjdn};
-  return *this;
+  flexint new_cjdn = cjdn_ + days;
+  if (!check_cjdn(new_cjdn))
+    THROW<std::overflow_error>("cjdn out of range after increment");
+  return Date(new_cjdn);
 }
 
 
 Date Date::decrement(const flexint& days) {
-  auto new_cjdn = cjdn_ -= days;
-  if (check_cjdn(new_cjdn)) return {new_cjdn};
-  return *this;
+  flexint new_cjdn = cjdn_ - days;
+  if (!check_cjdn(new_cjdn))
+    THROW<std::overflow_error>("cjdn out of range after decrement");
+  return Date(new_cjdn);
 }
 
 
